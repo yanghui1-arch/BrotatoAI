@@ -29,6 +29,33 @@ class Message(BaseModel):
             message["content"].append({"type": "text", "text": self.content})
         return message
 
+class Weapon(Enum):
+    SHORT_RANGE = "SHORT_RANGE"
+    LONG_RANGE = "LONG_RANGE"
+
+class State(BaseModel):
+    phrase: Optional[str] = None
+    enermy_number: int
+    weapon: Optional[Weapon] = None
+    character_hp: int
+    character_damage: int
+    green_props_number: int
+    green_props_coordinate: Optional[list[list]] = None
+    character_coordinate:Optional[list] = None
+
+class GameState(BaseModel):
+    start: bool
+    state: Optional[State] = None
+
+class Strategy(BaseModel):
+    strategy: str
+    opts: list[list]
+
 if __name__ == '__main__':
     message = Message.assistant_message("好的")
     print(message)
+    state = State(enermy_number=1, character_hp=2, character_damage=3, green_props_field=4, weapon=Weapon.SHORT_RANGE)
+    state_dict = state.__dict__
+    print(state_dict['character_hp'])
+    print(state)
+    print(GameState(start=False))

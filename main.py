@@ -1,30 +1,16 @@
-from src.agent import Agent, GameAgent
-from src.strategy import Strategy
 import keyboard
-import pyautogui
 from time import time, sleep
+from typing import Optional
 import base64
-from PIL import Image
-import io
 import mss
 import numpy as np
 import cv2
 import asyncio
-
-SPECIAL_OPTS = ["KEEP"]
-DEFAULT_STEPS = {'opts': [['w', 'a'], ['s'], ['d', 'd'], ['w', 'd'], ['a', 's'], ['w', 'a'], ['d', 's'], ['w']], 'seconds': [2.5, 1.8, 2.0, 2.2, 2.3, 2.4, 2.6, 2.2], "post_time": time()}
-
-async def valid_opt(opts:list[str], seconds):
-    for opt in opts:
-        if opt not in SPECIAL_OPTS:
-            keyboard.press(opt)
-    await asyncio.sleep(seconds)
-    for opt in opts:
-        if opt not in SPECIAL_OPTS:
-            keyboard.release(opt)
+from src.agent import Agent, StrategyAgent, ExecuteAgent, UmpireAgent
+from src.schema import GameState, State, Strategy
 
 screen_queue = asyncio.Queue()
-strategy_queue = asyncio.Queue()
+game_state_queue = asyncio.Queue()
 
 async def capture_screen():
     with mss.mss() as sct:
@@ -36,42 +22,63 @@ async def capture_screen():
             _, buffer = cv2.imencode(".png", img)
             img_base64 = base64.b64encode(buffer).decode('utf-8')
             await screen_queue.put({"img_base64": img_base64, "post_time": time()})
+            print(f"** Get one desk image. **")
             await asyncio.sleep(0.05)
 
-async def process(agent:Agent):
+async def process(agent:Agent) -> GameState:
+    """ process the img from queue """
     while True:
         screen = await screen_queue.get()
         post_time = screen.get("post_time")
         if time() - post_time > 1:
             continue
         img_base64 = screen.get("img_base64")
-        agent_strategy:dict = await agent(img_base64=img_base64)
-        await strategy_queue.put(agent_strategy)
-            
-async def execute():
-    await strategy_queue.put(DEFAULT_STEPS)
-    while True:
-        print(f"strategy queue has {strategy_queue.qsize()} items.")
-        strategy = await strategy_queue.get()
-        opts:list[list[str]] = strategy.get('opts', None)
-        seconds:list[float] = strategy.get('seconds', 1)
-        if not opts:
-            raise ValueError("Agent cannot operate Brotato")
-        print(f"Game agent choose kit `{opts} for {seconds}` stratygy.")
-        for opt, second in zip(opts, seconds):
-            print(f"Game agent choose `{''.join(opt)} for {str(second)}s` stratygy.")
-            await valid_opt(opt, second)
+        game_state:GameState = await agent(img_base64=img_base64)
+        if game_state.start and game_state.state and game_state.state.phrase and game_state.state.phrase != 'home':
+            await game_state_queue.put(game_state)
+        print("** Game doesn't start. **")
 
-async def main(agent:Agent, __game__="Brotato"):
-    current_time = time()
-    print(f"Now let's play {__game__} funny with AI! It's {current_time}")
-    asyncio.create_task(capture_screen())
-    asyncio.create_task(process(agent))
-    asyncio.create_task(execute())
+async def two_agent_cooperation(strategy_agent:StrategyAgent, execute_agent:ExecuteAgent):
+    """ use two agents to cooperate Brotato """
+    strategy_queue = asyncio.Queue()
+    latest_strategy = None
 
+    async def strategy(strategy_agent:StrategyAgent):
+        while True:
+            state:GameState = await game_state_queue.get()
+            print(f"Game state: {state}")
+            _state:dict = state.state.__dict__
+            strategy:Strategy = await strategy_agent(state=_state)
+            latest_strategy = strategy
+            print(f"Deepseek-v3 make decision: {latest_strategy}")
+            await strategy_queue.put(latest_strategy)
+            await asyncio.sleep(0.01)
+
+    strategy_task = asyncio.create_task(strategy(strategy_agent=strategy_agent))
     while True:
-        await asyncio.sleep(0.5)
+        try:
+            latest_strategy = strategy_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            latest_strategy = None
+        await execute(execute_agent=execute_agent, strategy=latest_strategy)
+        await asyncio.sleep(0.01)
+
+async def execute(execute_agent:ExecuteAgent, strategy:Strategy) -> GameState:
+    """ update state """
+    await execute_agent(strategy=strategy)
+
+async def version_2(umpire_agent: UmpireAgent, strategy_agent:StrategyAgent, execute_agent:ExecuteAgent, __game__="Brotato"):
+    print(f"Let's play {__game__} with VERSION 2.0 AI. Expect its perfect performance.")
+    capture_task = asyncio.create_task(capture_screen())
+    update_task = asyncio.create_task(process(umpire_agent))
+    await two_agent_cooperation(strategy_agent=strategy_agent, execute_agent=execute_agent)
+    await asyncio.gather(
+
+    )
 
 if __name__ == '__main__':
-    agent = GameAgent()
-    asyncio.run(main(agent))
+
+    strategy_agent = StrategyAgent()
+    execute_agent = ExecuteAgent()
+    umpire_agent = UmpireAgent()
+    asyncio.run(version_2(strategy_agent=strategy_agent, execute_agent=execute_agent, umpire_agent=umpire_agent))
