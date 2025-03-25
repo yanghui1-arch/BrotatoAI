@@ -16,12 +16,12 @@ class Agent(ABC):
     def __init__(self):
         super().__init__()
         self.client = AsyncOpenAI(
-            api_key="sk-af1b9aba64db4b3a91d827bb98e8cd8b", # replace your api key 
+            api_key="sk-xxx", # replace your api key 
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1", # if you dont use qwen please select your base url
         )
         self.vision = AsyncOpenAI(
-            api_key="4802cb0841524d8696d107d966acfc72.qbMWbgukhlL624Nt", # replace your api key 
-            base_url="https://open.bigmodel.cn/api/paas/v4/", # if you dont use qwen please select your base url
+            api_key="4xxxkhlxxxt", # replace your api key 
+            base_url="https://open.bigmodel.cn/api/paas/v4/", # if you dont use glm please select your base url
         )
 
     async def __call__(self, **kwargs) -> dict:
